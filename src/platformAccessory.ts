@@ -25,7 +25,7 @@ export class DigistatAccessory {
 
   private state = {
     targetTemp: 17,
-    currentTemp: 0,
+    currentTemp: 17,
     lastUpdatedCurrentTemp: new Date(),
   }
 
@@ -129,10 +129,11 @@ export class DigistatAccessory {
   async handleTargetHeatingCoolingStateGet() {
     this.platform.log.debug('Triggered GET TargetHeatingCoolingState');
 
-    // set this to a valid value for TargetHeatingCoolingState
-    const currentValue = this.platform.Characteristic.TargetHeatingCoolingState.HEAT;
-
-    return currentValue;
+    if(this.state.targetTemp >= this.state.currentTemp) {
+      return this.platform.Characteristic.TargetHeatingCoolingState.HEAT;
+    } else {
+      return this.platform.Characteristic.TargetHeatingCoolingState.OFF;
+    }
   }
 
   /**
@@ -158,7 +159,7 @@ export class DigistatAccessory {
         if(retryCounter > 0) {await this.sleep(10)};
         try {
           let output = execSync(command);
-          if (output.includes('Characteristic value/descriptor')) {
+          if (output.toString().includes('Characteristic value/descriptor')) {
             temperature = this.temperatureOutputToValue(output);
             if(temperature) {
               this.state.currentTemp = temperature;
@@ -241,7 +242,7 @@ export class DigistatAccessory {
   }
 
   temperatureOutputToValue(output: string) {
-    const stringArray = output.split(' ');
+    const stringArray = output.toString().split(' ');
     let temperature = parseInt(stringArray[10]);
     if(temperature == 0){ 
       return false;
