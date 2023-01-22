@@ -62,7 +62,7 @@ export class DigistatPlatform implements DynamicPlatformPlugin {
       },
       {
         displayName: 'Ben\'s Room',
-        macAddress: '0C:43:14:2F:3B:5F',
+        macAddress: '84:71:27:08:AF:BF',
       },
     ]
 
