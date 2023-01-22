@@ -24,7 +24,7 @@ export class DigistatAccessory {
   };
 
   private state = {
-    targetTemp: 0,
+    targetTemp: 17,
     currentTemp: 0,
     lastUpdatedCurrentTemp: null,
   }
@@ -130,7 +130,7 @@ export class DigistatAccessory {
     this.platform.log.debug('Triggered GET TargetHeatingCoolingState');
 
     // set this to a valid value for TargetHeatingCoolingState
-    const currentValue = this.platform.Characteristic.TargetHeatingCoolingState.AUTO;
+    const currentValue = this.platform.Characteristic.TargetHeatingCoolingState.HEAT;
 
     return currentValue;
   }
@@ -168,6 +168,7 @@ export class DigistatAccessory {
       }
       retryCounter++;
     } while (!success && retryCounter++ < 3);
+    this.state.currentTemp = temperature ?? 17;
     return temperature;
   }
 
@@ -204,6 +205,7 @@ export class DigistatAccessory {
       await this.sleep(10);
       execSync(command);
     }
+    this.state.targetTemp = value;
     return value
   }
 
