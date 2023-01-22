@@ -1,13 +1,13 @@
 import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
 
-import { ExampleHomebridgePlatform } from './platform';
+import { DigistatPlatform } from './platform';
 
 /**
  * Platform Accessory
  * An instance of this class is created for each accessory your platform registers
  * Each accessory may expose multiple services of different service types.
  */
-export class ExamplePlatformAccessory {
+export class DigistatAccessory {
   private service: Service;
 
   /**
@@ -20,26 +20,43 @@ export class ExamplePlatformAccessory {
   };
 
   constructor(
-    private readonly platform: ExampleHomebridgePlatform,
+    private readonly platform: DigistatPlatform,
     private readonly accessory: PlatformAccessory,
   ) {
 
     // set accessory information
     this.accessory.getService(this.platform.Service.AccessoryInformation)!
-      .setCharacteristic(this.platform.Characteristic.Manufacturer, 'Default-Manufacturer')
-      .setCharacteristic(this.platform.Characteristic.Model, 'Default-Model')
-      .setCharacteristic(this.platform.Characteristic.SerialNumber, 'Default-Serial');
+      .setCharacteristic(this.platform.Characteristic.Manufacturer, 'Drayton Wiser')
+      .setCharacteristic(this.platform.Characteristic.Model, 'Digistat')
+      .setCharacteristic(this.platform.Characteristic.SerialNumber, '0C:43:14:2F:3B:5F');
 
-    // get the LightBulb service if it exists, otherwise create a new LightBulb service
-    // you can create multiple services for each accessory
-    this.service = this.accessory.getService(this.platform.Service.Lightbulb) || this.accessory.addService(this.platform.Service.Lightbulb);
+    this.service = this.accessory.getService(this.platform.Service.Thermostat) || this.accessory.addService(this.platform.Service.Thermostat);
 
     // set the service name, this is what is displayed as the default name on the Home app
     // in this example we are using the name we stored in the `accessory.context` in the `discoverDevices` method.
-    this.service.setCharacteristic(this.platform.Characteristic.Name, accessory.context.device.exampleDisplayName);
+    this.service.setCharacteristic(this.platform.Characteristic.Name, accessory.context.device.displayName);
 
     // each service must implement at-minimum the "required characteristics" for the given service type
     // see https://developers.homebridge.io/#/service/Lightbulb
+
+    this.service.getCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState)
+      .onGet(this.handleCurrentHeatingCoolingStateGet.bind(this));
+
+    this.service.getCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState)
+      .onGet(this.handleTargetHeatingCoolingStateGet.bind(this))
+      .onSet(this.handleTargetHeatingCoolingStateSet.bind(this));
+
+    this.service.getCharacteristic(this.platform.Characteristic.CurrentTemperature)
+      .onGet(this.handleCurrentTemperatureGet.bind(this));
+
+    this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature)
+      .onGet(this.handleTargetTemperatureGet.bind(this))
+      .onSet(this.handleTargetTemperatureSet.bind(this));
+
+    this.service.getCharacteristic(this.platform.Characteristic.TemperatureDisplayUnits)
+      .onGet(this.handleTemperatureDisplayUnitsGet.bind(this))
+      .onSet(this.handleTemperatureDisplayUnitsSet.bind(this));
+
 
     // register handlers for the On/Off Characteristic
     this.service.getCharacteristic(this.platform.Characteristic.On)
@@ -83,13 +100,106 @@ export class ExamplePlatformAccessory {
       motionDetected = !motionDetected;
 
       // push the new value to HomeKit
-      motionSensorOneService.updateCharacteristic(this.platform.Characteristic.MotionDetected, motionDetected);
+      motionSensorOneService.updateCharacteristic(this.platform.Characteristic.CurrentTemperature, motionDetected);
       motionSensorTwoService.updateCharacteristic(this.platform.Characteristic.MotionDetected, !motionDetected);
-
+      this.handleCurrentTemperatureGet.bind(this)
       this.platform.log.debug('Triggering motionSensorOneService:', motionDetected);
       this.platform.log.debug('Triggering motionSensorTwoService:', !motionDetected);
-    }, 10000);
+    }, 600000);
   }
+
+
+  /**
+   * Handle requests to get the current value of the "Current Heating Cooling State" characteristic
+   */
+  async handleCurrentHeatingCoolingStateGet() {
+    this.platform.log.debug('Triggered GET CurrentHeatingCoolingState');
+
+    // set this to a valid value for CurrentHeatingCoolingState
+    const currentValue = this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
+
+    return currentValue;
+  }
+
+
+  /**
+   * Handle requests to get the current value of the "Target Heating Cooling State" characteristic
+   */
+  async handleTargetHeatingCoolingStateGet() {
+    this.platform.log.debug('Triggered GET TargetHeatingCoolingState');
+
+    // set this to a valid value for TargetHeatingCoolingState
+    const currentValue = this.platform.Characteristic.TargetHeatingCoolingState.OFF;
+
+    return currentValue;
+  }
+
+  /**
+   * Handle requests to set the "Target Heating Cooling State" characteristic
+   */
+  handleTargetHeatingCoolingStateSet(value) {
+    this.platform.log.debug('Triggered SET TargetHeatingCoolingState:' + value);
+  }
+
+  /**
+   * Handle requests to get the current value of the "Current Temperature" characteristic
+   */
+  handleCurrentTemperatureGet() {
+    this.platform.log.debug('Triggered GET CurrentTemperature');
+
+    // set this to a valid value for CurrentTemperature
+    const currentValue = -270;
+
+    return currentValue;
+  }
+
+
+  /**
+   * Handle requests to get the current value of the "Target Temperature" characteristic
+   */
+  handleTargetTemperatureGet() {
+    this.platform.log.debug('Triggered GET TargetTemperature');
+
+    // set this to a valid value for TargetTemperature
+    const currentValue = 10;
+
+    return currentValue;
+  }
+
+  /**
+   * Handle requests to set the "Target Temperature" characteristic
+   */
+  handleTargetTemperatureSet(value) {
+    this.platform.log.debug('Triggered SET TargetTemperature: ' + value);
+  }
+
+  /**
+   * Handle requests to get the current value of the "Temperature Display Units" characteristic
+   */
+  handleTemperatureDisplayUnitsGet() {
+    this.platform.log.debug('Triggered GET TemperatureDisplayUnits');
+
+    // set this to a valid value for TemperatureDisplayUnits
+    const currentValue = this.platform.Characteristic.TemperatureDisplayUnits.CELSIUS;
+
+    return currentValue;
+  }
+
+  /**
+   * Handle requests to set the "Temperature Display Units" characteristic
+   */
+  handleTemperatureDisplayUnitsSet(value) {
+    this.platform.log.debug('Triggered SET TemperatureDisplayUnits: ' + value);
+  }
+
+
+
+
+
+
+
+
+
 
   /**
    * Handle "SET" requests from HomeKit
@@ -98,7 +208,7 @@ export class ExamplePlatformAccessory {
   async setOn(value: CharacteristicValue) {
     // implement your own code to turn your device on/off
     this.exampleStates.On = value as boolean;
-
+    
     this.platform.log.debug('Set Characteristic On ->', value);
   }
 
