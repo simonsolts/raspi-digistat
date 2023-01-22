@@ -2,7 +2,7 @@ import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
 import { syncBuiltinESMExports } from 'module';
 
 import { DigistatPlatform } from './platform';
-const { exec } = require("child_process");
+const { execSync } = require("child_process");
 
 
 
@@ -22,6 +22,12 @@ export class DigistatAccessory {
     On: false,
     Brightness: 100,
   };
+
+  private state = {
+    targetTemp: 0,
+    currentTemp: 0,
+    lastUpdatedCurrentTemp: null,
+  }
 
   constructor(
     private readonly platform: DigistatPlatform,
@@ -139,13 +145,28 @@ export class DigistatAccessory {
   /**
    * Handle requests to get the current value of the "Current Temperature" characteristic
    */
-  handleCurrentTemperatureGet() {
-    this.platform.log.debug('Triggered GET CurrentTemperature');
-
-    // set this to a valid value for CurrentTemperature
-    const currentValue = -270;
-
-    return currentValue;
+  async handleCurrentTemperatureGet() {
+    let command = `gatttool --sec-level=high --device=0C:43:14:2F:3B:5F --char-read --handle='0x000f'`
+    let success = false;
+    let retryCounter = 0;
+    do {
+      if(retryCounter > 0) {await this.sleep(10)};
+      try {
+        let output = execSync(command);
+        if (output.includes('Characteristic value/descriptor')) {
+          let temperature = this.temperatureOutputToValue(output);
+          if(temperature) {
+            this.state.currentTemp = temperature;
+            success = true
+          }
+        } else {
+          this.platform.log.debug('Set TargetTemperature Failed: ' + value);
+        }
+      } catch (e) {
+        this.platform.log.debug('Set TargetTemperature Failed: ' + e);
+      }
+      retryCounter++;
+    } while (!success && retryCounter++ < 3);
   }
 
 
@@ -155,10 +176,7 @@ export class DigistatAccessory {
   handleTargetTemperatureGet() {
     this.platform.log.debug('Triggered GET TargetTemperature');
 
-    // set this to a valid value for TargetTemperature
-    const currentValue = 10;
-
-    return currentValue;
+    return this.state.targetTemp;
   }
 
   /**
@@ -168,18 +186,23 @@ export class DigistatAccessory {
     this.platform.log.debug('Triggered SET TargetTemperature: ' + value);
     let temperatureAsHex = this.temperatureToHex(value);
     let command = `gatttool --sec-level=high --device=0C:43:14:2F:3B:5F --char-write-req --handle='0x0008' --value='000009ff10c001000102${temperatureAsHex}00'`
-    let success = this.shell(command);
-    if (success) {
-      this.platform.log.info('Set TargetTemperature Success: ' + value);
-    } else {
-      await this.sleep(10);
-      success = this.shell(command);
-      if (success) {
-        this.platform.log.debug('Set TargetTemperature Success (attempt 2): ' + value);
+    let success = false;
+    try {
+      let output = execSync(command);
+      if (output.includes('Characteristic value was written successfully')) {
+        this.platform.log.info('Set TargetTemperature Success: ' + value);
+        success = true
       } else {
         this.platform.log.debug('Set TargetTemperature Failed: ' + value);
       }
+    } catch (e) {
+      this.platform.log.debug('Set TargetTemperature Failed: ' + e);
     }
+    if(!success) {
+      await this.sleep(10);
+      execSync(command);
+    }
+    return value
   }
 
   /**
@@ -202,7 +225,7 @@ export class DigistatAccessory {
   }
 
   shell(command: string) {
-    return exec(command, (error, stdout, stderr) => {
+    return ex(command, (error, stdout, stderr) => {
       if (error) {
         this.platform.log.error(`error: ${error.message}`);
         return false;
@@ -222,6 +245,16 @@ export class DigistatAccessory {
     const rounded = Math.ceil(temperature/5)*5;
     const hex = Number(temperature*10).toString(16);
     return hex;
+  }
+
+  temperatureOutputToValue(output: string) {
+    const stringArray = output.split(' ');
+    let temperature = parseInt(output[10]);
+    if(temperature == 0){ 
+      return false;
+    } else {
+      return temperature / 10;
+    }
   }
 
   sleep(seconds) {
