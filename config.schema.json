@@ -1,5 +1,5 @@
 {
-  "pluginAlias": "Digistat Controller",
+  "pluginAlias": "Digistat",
   "pluginType": "platform",
   "singular": "false",
   "schema": {
