@@ -1,6 +1,6 @@
 {
   "pluginAlias": "Digistat-Controller",
-  "pluginType": "accessory",
+  "pluginType": "platform",
   "singular": "false",
   "schema": {
     "type": "object",
