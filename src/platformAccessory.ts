@@ -26,7 +26,7 @@ export class DigistatAccessory {
   private state = {
     targetTemp: 17,
     currentTemp: 0,
-    lastUpdatedCurrentTemp: null,
+    lastUpdatedCurrentTemp: new Date(),
   }
 
   constructor(
@@ -146,30 +146,36 @@ export class DigistatAccessory {
    * Handle requests to get the current value of the "Current Temperature" characteristic
    */
   async handleCurrentTemperatureGet() {
-    let command = `gatttool --sec-level=high --device=0C:43:14:2F:3B:5F --char-read --handle='0x000f'`
-    let success = false;
-    let retryCounter = 0;
-    let temperature;
-    do {
-      if(retryCounter > 0) {await this.sleep(10)};
-      try {
-        let output = execSync(command);
-        if (output.includes('Characteristic value/descriptor')) {
-          temperature = this.temperatureOutputToValue(output);
-          if(temperature) {
-            this.state.currentTemp = temperature;
-            success = true
+    const now = new Date(); 
+    if ((now.getTime() - this.state.lastUpdatedCurrentTemp.getTime()) / 1000 < 5 * 60) {
+      return this.state.currentTemp;
+    } else {
+      let command = `gatttool --sec-level=high --device=0C:43:14:2F:3B:5F --char-read --handle='0x000f'`
+      let success = false;
+      let retryCounter = 0;
+      let temperature;
+      do {
+        if(retryCounter > 0) {await this.sleep(10)};
+        try {
+          let output = execSync(command);
+          if (output.includes('Characteristic value/descriptor')) {
+            temperature = this.temperatureOutputToValue(output);
+            if(temperature) {
+              this.state.currentTemp = temperature;
+              success = true
+            }
+          } else {
+            this.platform.log.debug('Get TargetTemperature Failed: ');
           }
-        } else {
-          this.platform.log.debug('Get TargetTemperature Failed: ');
+        } catch (e) {
+          this.platform.log.debug('Get TargetTemperature Failed: ' + e);
         }
-      } catch (e) {
-        this.platform.log.debug('Get TargetTemperature Failed: ' + e);
-      }
-      retryCounter++;
-    } while (!success && retryCounter++ < 3);
-    this.state.currentTemp = temperature ?? 17;
-    return temperature;
+        retryCounter++;
+      } while (!success && retryCounter++ < 3);
+      this.state.currentTemp = temperature ?? 17;
+      this.state.lastUpdatedCurrentTemp = new Date();
+      return temperature;
+    }
   }
 
 
