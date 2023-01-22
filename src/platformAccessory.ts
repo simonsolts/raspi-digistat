@@ -170,7 +170,7 @@ export class DigistatAccessory {
     let command = `gatttool --sec-level=high --device=0C:43:14:2F:3B:5F --char-write-req --handle='0x0008' --value='000009ff10c001000102${temperatureAsHex}00'`
     let success = this.shell(command);
     if (success) {
-      this.platform.log.debug('Set TargetTemperature Success: ' + value);
+      this.platform.log.info('Set TargetTemperature Success: ' + value);
     } else {
       await this.sleep(10);
       success = this.shell(command);
