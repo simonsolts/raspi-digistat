@@ -111,7 +111,7 @@ export class DigistatAccessory {
     this.platform.log.debug('Triggered GET CurrentHeatingCoolingState');
 
     // set this to a valid value for CurrentHeatingCoolingState
-    const currentValue = this.platform.Characteristic.CurrentHeatingCoolingState.AUTO;
+    const currentValue = this.platform.Characteristic.CurrentHeatingCoolingState.HEAT;
 
     return currentValue;
   }
