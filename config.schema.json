@@ -1,0 +1,35 @@
+{
+  "pluginAlias": "Digistat",
+  "pluginType": "platform",
+  "singular": "false",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "thermostatList": {
+        "title": "Thermostat List",
+        "type": "string",
+        "required": true,
+        "items": {
+          "title": "Thermostats",
+          "type": "array",
+          "items": {
+            "friendlyName": "Lounge",
+            "type": "string",
+            "macAddress": "0C:43:14:2F:3B:5F"
+          }
+        },
+        "description": "The bluetooth address(es) of the thermosat to control. This can be found on a sticker on the back of the thermostat. Example: 00:11:22:33:44:55"
+      },
+      "minTemp": {
+        "title": "Minimum Temperature",
+        "type": "number",
+        "placeholder": "7"
+      },
+      "maxTemp": {
+        "title": "Maximum Temperature",
+        "type": "number",
+        "placeholder": "30"
+      }
+    }
+  }
+}
