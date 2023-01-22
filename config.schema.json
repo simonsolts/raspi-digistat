@@ -16,7 +16,8 @@
             "friendlyName": "Lounge",
             "type": "string",
             "macAddress": "0C:43:14:2F:3B:5F"
-          },
+          }
+        },
         "description": "The bluetooth address(es) of the thermosat to control. This can be found on a sticker on the back of the thermostat. Example: 00:11:22:33:44:55"
       },
       "minTemp": {
