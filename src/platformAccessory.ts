@@ -234,7 +234,7 @@ export class DigistatAccessory {
 
   temperatureOutputToValue(output: string) {
     const stringArray = output.split(' ');
-    let temperature = parseInt(output[10]);
+    let temperature = parseInt(stringArray[10]);
     if(temperature == 0){ 
       return false;
     } else {
