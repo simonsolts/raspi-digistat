@@ -167,7 +167,7 @@ export class DigistatAccessory {
   async handleTargetTemperatureSet(value) {
     this.platform.log.debug('Triggered SET TargetTemperature: ' + value);
     let temperatureAsHex = this.temperatureToHex(value);
-    let command = `gatttool --sec-level=high --device=0C:43:14:2F:3B:5F --char-write-req --handle='0x0008' --value='000009ff10c001000102${temperatureAsHex}00' --listen`
+    let command = `gatttool --sec-level=high --device=0C:43:14:2F:3B:5F --char-write-req --handle='0x0008' --value='000009ff10c001000102${temperatureAsHex}00'`
     let success = this.shell(command);
     if (success) {
       this.platform.log.debug('Set TargetTemperature Success: ' + value);
