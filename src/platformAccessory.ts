@@ -149,24 +149,26 @@ export class DigistatAccessory {
     let command = `gatttool --sec-level=high --device=0C:43:14:2F:3B:5F --char-read --handle='0x000f'`
     let success = false;
     let retryCounter = 0;
+    let temperature;
     do {
       if(retryCounter > 0) {await this.sleep(10)};
       try {
         let output = execSync(command);
         if (output.includes('Characteristic value/descriptor')) {
-          let temperature = this.temperatureOutputToValue(output);
+          temperature = this.temperatureOutputToValue(output);
           if(temperature) {
             this.state.currentTemp = temperature;
             success = true
           }
         } else {
-          this.platform.log.debug('Set TargetTemperature Failed: ' + value);
+          this.platform.log.debug('Get TargetTemperature Failed: ');
         }
       } catch (e) {
-        this.platform.log.debug('Set TargetTemperature Failed: ' + e);
+        this.platform.log.debug('Get TargetTemperature Failed: ' + e);
       }
       retryCounter++;
     } while (!success && retryCounter++ < 3);
+    return temperature;
   }
 
 
@@ -222,23 +224,6 @@ export class DigistatAccessory {
    */
   handleTemperatureDisplayUnitsSet(value) {
     this.platform.log.debug('Triggered SET TemperatureDisplayUnits: ' + value);
-  }
-
-  shell(command: string) {
-    return ex(command, (error, stdout, stderr) => {
-      if (error) {
-        this.platform.log.error(`error: ${error.message}`);
-        return false;
-      }
-      if (stderr) {
-        this.platform.log.error(`stderr: ${stderr}`);
-        return false;
-      }
-      if (stdout == "Characteristic value was written successfully") {
-        this.platform.log.info(`stdout: ${stdout}`);
-        return true
-      }
-    });
   }
 
   temperatureToHex(temperature: number) {
