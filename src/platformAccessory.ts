@@ -14,15 +14,7 @@ const { execSync } = require("child_process");
 export class DigistatAccessory {
   private service: Service;
 
-  /**
-   * These are just used to create a working example
-   * You should implement your own code to track the state of your accessory
-   */
-  private exampleStates = {
-    On: false,
-    Brightness: 100,
-  };
-
+  private polltime = 15;
   private state = {
     targetTemp: 17,
     currentTemp: 17,
@@ -66,7 +58,7 @@ export class DigistatAccessory {
     this.service.getCharacteristic(this.platform.Characteristic.TemperatureDisplayUnits)
       .onGet(this.handleTemperatureDisplayUnitsGet.bind(this))
       .onSet(this.handleTemperatureDisplayUnitsSet.bind(this));
-
+  
 
     /**
      * Creating multiple services of the same type.
@@ -148,10 +140,10 @@ export class DigistatAccessory {
    */
   async handleCurrentTemperatureGet() {
     const now = new Date(); 
-    if ((now.getTime() - this.state.lastUpdatedCurrentTemp.getTime()) / 1000 < 5 * 60) {
+    if ((now.getTime() - this.state.lastUpdatedCurrentTemp.getTime()) / 1000 < (this.polltime * 60)) {
       return this.state.currentTemp;
     } else {
-      let command = `gatttool --sec-level=high --device=0C:43:14:2F:3B:5F --char-read --handle='0x000f'`
+      let command = `gatttool --sec-level=high --device=${this.accessory.context.device.macAddress} --char-read --handle='0x000f'`
       let success = false;
       let retryCounter = 0;
       let temperature;
@@ -195,7 +187,7 @@ export class DigistatAccessory {
   async handleTargetTemperatureSet(value) {
     this.platform.log.debug('Triggered SET TargetTemperature: ' + value);
     let temperatureAsHex = this.temperatureToHex(value);
-    let command = `gatttool --sec-level=high --device=0C:43:14:2F:3B:5F --char-write-req --handle='0x0008' --value='000009ff10c001000102${temperatureAsHex}00'`
+    let command = `gatttool --sec-level=high --device=${this.accessory.context.device.macAddress} --char-write-req --handle='0x0008' --value='000009ff10c001000102${temperatureAsHex}00'`
     let success = false;
     try {
       let output = execSync(command);
@@ -256,62 +248,5 @@ export class DigistatAccessory {
       setTimeout(resolve, seconds * 1000);
     });
   }
-
-
-
-
-
-
-
-
-
-  /**
-   * Handle "SET" requests from HomeKit
-   * These are sent when the user changes the state of an accessory, for example, turning on a Light bulb.
-   */
-  async setOn(value: CharacteristicValue) {
-    // implement your own code to turn your device on/off
-    this.exampleStates.On = value as boolean;
-    
-    this.platform.log.debug('Set Characteristic On ->', value);
-  }
-
-  /**
-   * Handle the "GET" requests from HomeKit
-   * These are sent when HomeKit wants to know the current state of the accessory, for example, checking if a Light bulb is on.
-   *
-   * GET requests should return as fast as possbile. A long delay here will result in
-   * HomeKit being unresponsive and a bad user experience in general.
-   *
-   * If your device takes time to respond you should update the status of your device
-   * asynchronously instead using the `updateCharacteristic` method instead.
-
-   * @example
-   * this.service.updateCharacteristic(this.platform.Characteristic.On, true)
-   */
-  async getOn(): Promise<CharacteristicValue> {
-    // implement your own code to check if the device is on
-    const isOn = this.exampleStates.On;
-
-    this.platform.log.debug('Get Characteristic On ->', isOn);
-
-    // if you need to return an error to show the device as "Not Responding" in the Home app:
-    // throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
-
-    return isOn;
-  }
-
-  /**
-   * Handle "SET" requests from HomeKit
-   * These are sent when the user changes the state of an accessory, for example, changing the Brightness
-   */
-  async setBrightness(value: CharacteristicValue) {
-    // implement your own code to set the brightness
-    this.exampleStates.Brightness = value as number;
-
-    this.platform.log.debug('Set Characteristic Brightness -> ', value);
-  }
-
-
 
 }

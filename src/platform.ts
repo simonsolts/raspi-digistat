@@ -54,22 +54,16 @@ export class DigistatPlatform implements DynamicPlatformPlugin {
     // EXAMPLE ONLY
     // A real plugin you would discover accessories from the local network, cloud services
     // or a user-defined array in the platform config.
-    const exampleDevices = [
-      {
-        exampleUniqueId: 'ABCD',
-        exampleDisplayName: 'Bedroom',
-      },
-      {
-        exampleUniqueId: 'EFGH',
-        exampleDisplayName: 'Kitchen',
-      },
-    ];
 
     const devices = [
       {
         displayName: 'Lounge',
         macAddress: '0C:43:14:2F:3B:5F',
-      }
+      },
+      {
+        displayName: 'Ben\'s Room',
+        macAddress: '0C:43:14:2F:3B:5F',
+      },
     ]
 
 
