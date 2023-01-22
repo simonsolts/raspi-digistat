@@ -1,6 +1,10 @@
 import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
+import { syncBuiltinESMExports } from 'module';
 
 import { DigistatPlatform } from './platform';
+const { exec } = require("child_process");
+
+
 
 /**
  * Platform Accessory
@@ -58,15 +62,6 @@ export class DigistatAccessory {
       .onSet(this.handleTemperatureDisplayUnitsSet.bind(this));
 
 
-    // register handlers for the On/Off Characteristic
-    this.service.getCharacteristic(this.platform.Characteristic.On)
-      .onSet(this.setOn.bind(this))                // SET - bind to the `setOn` method below
-      .onGet(this.getOn.bind(this));               // GET - bind to the `getOn` method below
-
-    // register handlers for the Brightness Characteristic
-    this.service.getCharacteristic(this.platform.Characteristic.Brightness)
-      .onSet(this.setBrightness.bind(this));       // SET - bind to the 'setBrightness` method below
-
     /**
      * Creating multiple services of the same type.
      *
@@ -78,34 +73,34 @@ export class DigistatAccessory {
      * can use the same sub type id.)
      */
 
-    // Example: add two "motion sensor" services to the accessory
-    const motionSensorOneService = this.accessory.getService('Motion Sensor One Name') ||
-      this.accessory.addService(this.platform.Service.MotionSensor, 'Motion Sensor One Name', 'YourUniqueIdentifier-1');
+    // // Example: add two "motion sensor" services to the accessory
+    // const motionSensorOneService = this.accessory.getService('Motion Sensor One Name') ||
+    //   this.accessory.addService(this.platform.Service.MotionSensor, 'Motion Sensor One Name', 'YourUniqueIdentifier-1');
 
-    const motionSensorTwoService = this.accessory.getService('Motion Sensor Two Name') ||
-      this.accessory.addService(this.platform.Service.MotionSensor, 'Motion Sensor Two Name', 'YourUniqueIdentifier-2');
+    // const motionSensorTwoService = this.accessory.getService('Motion Sensor Two Name') ||
+    //   this.accessory.addService(this.platform.Service.MotionSensor, 'Motion Sensor Two Name', 'YourUniqueIdentifier-2');
 
-    /**
-     * Updating characteristics values asynchronously.
-     *
-     * Example showing how to update the state of a Characteristic asynchronously instead
-     * of using the `on('get')` handlers.
-     * Here we change update the motion sensor trigger states on and off every 10 seconds
-     * the `updateCharacteristic` method.
-     *
-     */
-    let motionDetected = false;
-    setInterval(() => {
-      // EXAMPLE - inverse the trigger
-      motionDetected = !motionDetected;
+    // /**
+    //  * Updating characteristics values asynchronously.
+    //  *
+    //  * Example showing how to update the state of a Characteristic asynchronously instead
+    //  * of using the `on('get')` handlers.
+    //  * Here we change update the motion sensor trigger states on and off every 10 seconds
+    //  * the `updateCharacteristic` method.
+    //  *
+    //  */
+    // let motionDetected = false;
+    // setInterval(() => {
+    //   // EXAMPLE - inverse the trigger
+    //   motionDetected = !motionDetected;
 
-      // push the new value to HomeKit
-      motionSensorOneService.updateCharacteristic(this.platform.Characteristic.CurrentTemperature, motionDetected);
-      motionSensorTwoService.updateCharacteristic(this.platform.Characteristic.MotionDetected, !motionDetected);
-      this.handleCurrentTemperatureGet.bind(this)
-      this.platform.log.debug('Triggering motionSensorOneService:', motionDetected);
-      this.platform.log.debug('Triggering motionSensorTwoService:', !motionDetected);
-    }, 600000);
+    //   // push the new value to HomeKit
+    //   motionSensorOneService.updateCharacteristic(this.platform.Characteristic.CurrentTemperature, motionDetected);
+    //   motionSensorTwoService.updateCharacteristic(this.platform.Characteristic.MotionDetected, !motionDetected);
+    //   this.handleCurrentTemperatureGet.bind(this)
+    //   this.platform.log.debug('Triggering motionSensorOneService:', motionDetected);
+    //   this.platform.log.debug('Triggering motionSensorTwoService:', !motionDetected);
+    // }, 600000);
   }
 
 
@@ -116,7 +111,7 @@ export class DigistatAccessory {
     this.platform.log.debug('Triggered GET CurrentHeatingCoolingState');
 
     // set this to a valid value for CurrentHeatingCoolingState
-    const currentValue = this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
+    const currentValue = this.platform.Characteristic.CurrentHeatingCoolingState.AUTO;
 
     return currentValue;
   }
@@ -129,7 +124,7 @@ export class DigistatAccessory {
     this.platform.log.debug('Triggered GET TargetHeatingCoolingState');
 
     // set this to a valid value for TargetHeatingCoolingState
-    const currentValue = this.platform.Characteristic.TargetHeatingCoolingState.OFF;
+    const currentValue = this.platform.Characteristic.TargetHeatingCoolingState.AUTO;
 
     return currentValue;
   }
@@ -169,8 +164,22 @@ export class DigistatAccessory {
   /**
    * Handle requests to set the "Target Temperature" characteristic
    */
-  handleTargetTemperatureSet(value) {
+  async handleTargetTemperatureSet(value) {
     this.platform.log.debug('Triggered SET TargetTemperature: ' + value);
+    let temperatureAsHex = this.temperatureToHex(value);
+    let command = `gatttool --sec-level=high --device=0C:43:14:2F:3B:5F --char-write-req --handle='0x0008' --value='000009ff10c001000102${temperatureAsHex}00' --listen`
+    let success = this.shell(command);
+    if (success) {
+      this.platform.log.debug('Set TargetTemperature Success: ' + value);
+    } else {
+      await this.sleep(10);
+      success = this.shell(command);
+      if (success) {
+        this.platform.log.debug('Set TargetTemperature Success (attempt 2): ' + value);
+      } else {
+        this.platform.log.debug('Set TargetTemperature Failed: ' + value);
+      }
+    }
   }
 
   /**
@@ -192,6 +201,34 @@ export class DigistatAccessory {
     this.platform.log.debug('Triggered SET TemperatureDisplayUnits: ' + value);
   }
 
+  shell(command: string) {
+    return exec(command, (error, stdout, stderr) => {
+      if (error) {
+        this.platform.log.error(`error: ${error.message}`);
+        return false;
+      }
+      if (stderr) {
+        this.platform.log.error(`stderr: ${stderr}`);
+        return false;
+      }
+      if (stdout == "Characteristic value was written successfully") {
+        this.platform.log.info(`stdout: ${stdout}`);
+        return true
+      }
+    });
+  }
+
+  temperatureToHex(temperature: number) {
+    const rounded = Math.ceil(temperature/5)*5;
+    const hex = Number(temperature*10).toString(16);
+    return hex;
+  }
+
+  sleep(seconds) {
+    return new Promise((resolve) => {
+      setTimeout(resolve, seconds * 1000);
+    });
+  }
 
 
 
@@ -247,5 +284,7 @@ export class DigistatAccessory {
 
     this.platform.log.debug('Set Characteristic Brightness -> ', value);
   }
+
+
 
 }
