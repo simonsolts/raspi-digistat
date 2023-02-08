@@ -57,12 +57,12 @@ export class DigistatPlatform implements DynamicPlatformPlugin {
 
     const devices = [
       {
-        displayName: 'Example - Bedroom',
-        macAddress: '00:11:22:33:44:55',
+        displayName: 'Lounge',
+        macAddress: '0C:43:14:2F:3B:5F',
       },
       {
-        displayName: 'Example - Living Room',
-        macAddress: '00:11:22:33:44:55',
+        displayName: 'Ben\'s Room',
+        macAddress: '84:71:27:08:AF:BF',
       },
     ]
 
