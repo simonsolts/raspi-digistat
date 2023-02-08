@@ -35,7 +35,7 @@ export class DigistatAccessory {
     this.accessory.getService(this.platform.Service.AccessoryInformation)!
       .setCharacteristic(this.platform.Characteristic.Manufacturer, 'Drayton Wiser')
       .setCharacteristic(this.platform.Characteristic.Model, 'Digistat')
-      .setCharacteristic(this.platform.Characteristic.SerialNumber, this.accessory.context.device.serialNumber);
+      .setCharacteristic(this.platform.Characteristic.SerialNumber, this.accessory.context.device.macAddress);
 
     this.service = this.accessory.getService(this.platform.Service.Thermostat) || this.accessory.addService(this.platform.Service.Thermostat);
 
