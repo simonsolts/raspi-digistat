@@ -14,11 +14,16 @@ const { execSync } = require("child_process");
 export class DigistatAccessory {
   private service: Service;
 
-  private polltime = 15;
-  private state = {
-    targetTemp: 17,
+  public polltime = 15; // In minutes
+  public pollTimeInMilliseconds = this.polltime * 60000;
+  public pollTimeInSeconds = this.polltime * 60;
+  public state = {
+    targetTemp: 10,
     currentTemp: 17,
     lastUpdatedCurrentTemp: new Date(),
+    targetHeatingState: this.platform.Characteristic.TargetHeatingCoolingState.OFF,
+    heatingState: this.platform.Characteristic.CurrentHeatingCoolingState.OFF,
+    temperatureDisplayUnits: this.platform.Characteristic.TemperatureDisplayUnits.CELSIUS,
   }
 
   constructor(
@@ -30,13 +35,13 @@ export class DigistatAccessory {
     this.accessory.getService(this.platform.Service.AccessoryInformation)!
       .setCharacteristic(this.platform.Characteristic.Manufacturer, 'Drayton Wiser')
       .setCharacteristic(this.platform.Characteristic.Model, 'Digistat')
-      .setCharacteristic(this.platform.Characteristic.SerialNumber, '0C:43:14:2F:3B:5F');
+      .setCharacteristic(this.platform.Characteristic.SerialNumber, this.accessory.context.device.serialNumber);
 
     this.service = this.accessory.getService(this.platform.Service.Thermostat) || this.accessory.addService(this.platform.Service.Thermostat);
 
     // set the service name, this is what is displayed as the default name on the Home app
     // in this example we are using the name we stored in the `accessory.context` in the `discoverDevices` method.
-    this.service.setCharacteristic(this.platform.Characteristic.Name, accessory.context.device.displayName);
+    this.service.setCharacteristic(this.platform.Characteristic.Name, this.accessory.context.device.macAddress);
 
     // each service must implement at-minimum the "required characteristics" for the given service type
     // see https://developers.homebridge.io/#/service/Lightbulb
@@ -58,47 +63,8 @@ export class DigistatAccessory {
     this.service.getCharacteristic(this.platform.Characteristic.TemperatureDisplayUnits)
       .onGet(this.handleTemperatureDisplayUnitsGet.bind(this))
       .onSet(this.handleTemperatureDisplayUnitsSet.bind(this));
-  
-
-    /**
-     * Creating multiple services of the same type.
-     *
-     * To avoid "Cannot add a Service with the same UUID another Service without also defining a unique 'subtype' property." error,
-     * when creating multiple services of the same type, you need to use the following syntax to specify a name and subtype id:
-     * this.accessory.getService('NAME') || this.accessory.addService(this.platform.Service.Lightbulb, 'NAME', 'USER_DEFINED_SUBTYPE_ID');
-     *
-     * The USER_DEFINED_SUBTYPE must be unique to the platform accessory (if you platform exposes multiple accessories, each accessory
-     * can use the same sub type id.)
-     */
-
-    // // Example: add two "motion sensor" services to the accessory
-    // const motionSensorOneService = this.accessory.getService('Motion Sensor One Name') ||
-    //   this.accessory.addService(this.platform.Service.MotionSensor, 'Motion Sensor One Name', 'YourUniqueIdentifier-1');
-
-    // const motionSensorTwoService = this.accessory.getService('Motion Sensor Two Name') ||
-    //   this.accessory.addService(this.platform.Service.MotionSensor, 'Motion Sensor Two Name', 'YourUniqueIdentifier-2');
-
-    // /**
-    //  * Updating characteristics values asynchronously.
-    //  *
-    //  * Example showing how to update the state of a Characteristic asynchronously instead
-    //  * of using the `on('get')` handlers.
-    //  * Here we change update the motion sensor trigger states on and off every 10 seconds
-    //  * the `updateCharacteristic` method.
-    //  *
-    //  */
-    // let motionDetected = false;
-    // setInterval(() => {
-    //   // EXAMPLE - inverse the trigger
-    //   motionDetected = !motionDetected;
-
-    //   // push the new value to HomeKit
-    //   motionSensorOneService.updateCharacteristic(this.platform.Characteristic.CurrentTemperature, motionDetected);
-    //   motionSensorTwoService.updateCharacteristic(this.platform.Characteristic.MotionDetected, !motionDetected);
-    //   this.handleCurrentTemperatureGet.bind(this)
-    //   this.platform.log.debug('Triggering motionSensorOneService:', motionDetected);
-    //   this.platform.log.debug('Triggering motionSensorTwoService:', !motionDetected);
-    // }, 600000);
+    
+    setInterval(async () =>{await this.getCurrentTemperaturePoll()}, this.pollTimeInMilliseconds);
   }
 
 
@@ -106,12 +72,16 @@ export class DigistatAccessory {
    * Handle requests to get the current value of the "Current Heating Cooling State" characteristic
    */
   async handleCurrentHeatingCoolingStateGet() {
-    this.platform.log.debug('Triggered GET CurrentHeatingCoolingState');
-
-    // set this to a valid value for CurrentHeatingCoolingState
-    const currentValue = this.platform.Characteristic.CurrentHeatingCoolingState.HEAT;
-
-    return currentValue;
+    this.platform.log.debug('Triggered GET TargetHeatingCoolingState');
+    if(this.state.heatingState == (this.platform.Characteristic.CurrentHeatingCoolingState.HEAT || this.platform.Characteristic.CurrentHeatingCoolingState.OFF)) {
+      return this.state.heatingState;
+    } else {
+      if(this.state.targetTemp >= this.state.currentTemp) {
+        return this.platform.Characteristic.CurrentHeatingCoolingState.HEAT;
+      } else {
+        return this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
+      }
+    }
   }
 
 
@@ -120,37 +90,46 @@ export class DigistatAccessory {
    */
   async handleTargetHeatingCoolingStateGet() {
     this.platform.log.debug('Triggered GET TargetHeatingCoolingState');
-
-    if(this.state.targetTemp >= this.state.currentTemp) {
-      return this.platform.Characteristic.TargetHeatingCoolingState.HEAT;
+    if(this.state.heatingState == (this.platform.Characteristic.CurrentHeatingCoolingState.HEAT || this.platform.Characteristic.CurrentHeatingCoolingState.OFF)) {
+      return this.state.heatingState;
     } else {
-      return this.platform.Characteristic.TargetHeatingCoolingState.OFF;
+      if(this.state.targetTemp >= this.state.currentTemp) {
+        return this.platform.Characteristic.CurrentHeatingCoolingState.HEAT;
+      } else {
+        return this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
+      }
     }
   }
 
   /**
    * Handle requests to set the "Target Heating Cooling State" characteristic
    */
-  handleTargetHeatingCoolingStateSet(value) {
-    this.platform.log.debug('Triggered SET TargetHeatingCoolingState:' + value);
+  async handleTargetHeatingCoolingStateSet(value: CharacteristicValue) {
+    this.platform.log.debug('Triggered SET TargetHeatingCoolingState');
+    if(value == this.platform.Characteristic.TargetHeatingCoolingState.HEAT) {
+      return value;
+    } else {
+      return this.platform.Characteristic.TargetHeatingCoolingState.OFF;
+    }
   }
+
 
   /**
    * Handle requests to get the current value of the "Current Temperature" characteristic
    */
   async handleCurrentTemperatureGet() {
     const now = new Date(); 
-    if ((now.getTime() - this.state.lastUpdatedCurrentTemp.getTime()) / 1000 < (this.polltime * 60)) {
+    if ((now.getTime() - this.state.lastUpdatedCurrentTemp.getTime()) < (this.pollTimeInSeconds)) {
       return this.state.currentTemp;
     } else {
-      let command = `gatttool --sec-level=high --device=${this.accessory.context.device.macAddress} --char-read --handle='0x000f'`
-      let success = false;
-      let retryCounter = 0;
-      let temperature;
+      var command = `gatttool --sec-level=high --device=${this.accessory.context.device.macAddress} --char-read --handle='0x000f'`
+      var success = false;
+      var retryCounter = 0;
+      var temperature = 0;
       do {
         if(retryCounter > 0) {await this.sleep(10)};
         try {
-          let output = execSync(command);
+          let output = execSync(command, {timeout: 20});
           if (output.toString().includes('Characteristic value/descriptor')) {
             temperature = this.temperatureOutputToValue(output);
             if(temperature) {
@@ -158,18 +137,65 @@ export class DigistatAccessory {
               success = true
             }
           } else {
-            this.platform.log.debug('Get TargetTemperature Failed: ');
+            this.platform.log.debug('Get Current Failed: ');
           }
         } catch (e) {
-          this.platform.log.debug('Get TargetTemperature Failed: ' + e);
+          this.platform.log.debug('Get Current Failed: ' + e);
         }
         retryCounter++;
-      } while (!success && retryCounter++ < 3);
-      this.state.currentTemp = temperature ?? 17;
-      this.state.lastUpdatedCurrentTemp = new Date();
-      return temperature;
+      } while (success && retryCounter++ <= 3);
+      try {
+        this.state.currentTemp = temperature;
+        this.state.lastUpdatedCurrentTemp = new Date();
+        return this.state.currentTemp;
+      } catch (e) {
+        this.platform.log.debug('Get Current Temperature Failed, using stale temperature: ' + e);
+        return this.state.currentTemp;
+      }
+      return this.state.currentTemp;
     }
   }
+
+    /**
+   * Handle requests to get the current value of the "Current Temperature" characteristic, used to poll so it's always up to date
+   */
+    async getCurrentTemperaturePoll() {
+      const now = new Date(); 
+      if ((now.getTime() - this.state.lastUpdatedCurrentTemp.getTime()) / 1000 < (this.polltime * 60)) {
+        return this.state.currentTemp;
+      } else {
+        var command = `gatttool --sec-level=high --device=${this.accessory.context.device.macAddress} --char-read --handle='0x000f'`
+        var success = false;
+        var retryCounter = 0;
+        var temperature = 0;
+        do {
+          if(retryCounter > 0) {await this.sleep(10)};
+          try {
+            let output = execSync(command, {timeout: 20});
+            if (output.toString().includes('Characteristic value/descriptor')) {
+              temperature = this.temperatureOutputToValue(output);
+              if(temperature) {
+                this.state.currentTemp = temperature;
+                success = true
+              }
+            } else {
+              this.platform.log.debug('Get TargetTemperature Failed: ');
+            }
+          } catch (e) {
+            this.platform.log.debug('Get TargetTemperature Failed: ' + e);
+          }
+          retryCounter++;
+        } while (success && retryCounter++ <= 3);
+        try {
+          this.state.currentTemp = temperature;
+          this.state.lastUpdatedCurrentTemp = new Date();
+          this.service.getCharacteristic(this.platform.Characteristic.CurrentTemperature).updateValue(this.state.currentTemp);
+        } catch (e) {
+          this.platform.log.debug('Get Current Temperature Failed, using stale temperature: ' + e);
+        }
+      }
+    }
+
 
 
   /**
@@ -177,8 +203,17 @@ export class DigistatAccessory {
    */
   handleTargetTemperatureGet() {
     this.platform.log.debug('Triggered GET TargetTemperature');
-
-    return this.state.targetTemp;
+    if (this.state.targetTemp <= 14) {
+      this.service.getCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState).updateValue(this.platform.Characteristic.CurrentHeatingCoolingState.OFF);
+      return 14
+    } else if (this.state.targetTemp > this.state.currentTemp) {
+      this.service.getCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState).updateValue(this.platform.Characteristic.CurrentHeatingCoolingState.HEAT);
+      return this.state.targetTemp;
+    } else if (this.state.targetTemp <= this.state.currentTemp) {
+      this.service.getCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState).updateValue(this.platform.Characteristic.CurrentHeatingCoolingState.OFF);
+      if(this.state.targetTemp < 14) {return 14} else {return this.state.targetTemp}
+    }
+    return this.state.targetTemp
   }
 
   /**
@@ -186,8 +221,8 @@ export class DigistatAccessory {
    */
   async handleTargetTemperatureSet(value) {
     this.platform.log.debug('Triggered SET TargetTemperature: ' + value);
-    let temperatureAsHex = this.temperatureToHex(value);
-    let command = `gatttool --sec-level=high --device=${this.accessory.context.device.macAddress} --char-write-req --handle='0x0008' --value='000009ff10c001000102${temperatureAsHex}00'`
+    const temperatureAsHex = this.temperatureToHex(value);
+    const command = `gatttool --sec-level=high --device=${this.accessory.context.device.macAddress} --char-write-req --handle='0x0008' --value='000009ff10c001000102${temperatureAsHex}00'`
     let success = false;
     try {
       let output = execSync(command);
@@ -224,7 +259,14 @@ export class DigistatAccessory {
    * Handle requests to set the "Temperature Display Units" characteristic
    */
   handleTemperatureDisplayUnitsSet(value) {
-    this.platform.log.debug('Triggered SET TemperatureDisplayUnits: ' + value);
+    if(value == this.platform.Characteristic.TemperatureDisplayUnits.CELSIUS || this.platform.Characteristic.TemperatureDisplayUnits.FAHRENHEIT) {
+      this.state.temperatureDisplayUnits = value;
+      return value;
+    } else {
+      this.platform.log.debug('Triggered SET TemperatureDisplayUnits: ' + value + ' is not a valid value, usign CELSIUS');
+      this.state.temperatureDisplayUnits = this.platform.Characteristic.TemperatureDisplayUnits.CELSIUS;
+      return this.platform.Characteristic.TemperatureDisplayUnits.CELSIUS;
+    }
   }
 
   temperatureToHex(temperature: number) {
@@ -233,11 +275,11 @@ export class DigistatAccessory {
     return hex;
   }
 
-  temperatureOutputToValue(output: string) {
+  temperatureOutputToValue(output: string) :number {
     const stringArray = output.toString().split(' ');
-    let temperature = parseInt(stringArray[10]);
-    if(temperature == 0){ 
-      return false;
+    const temperature = parseInt(stringArray[10] ?? '0', 16);
+    if(temperature <= 100){ 
+      return 0;
     } else {
       return temperature / 10;
     }
