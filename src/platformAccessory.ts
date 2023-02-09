@@ -14,7 +14,7 @@ const { execSync } = require("child_process");
 export class DigistatAccessory {
   private service: Service;
 
-  public BLUETOOTH_MAX_RETRIES = 5; // Number of times to retry, may need adjusting based on your system's bluetooth performance
+  public BLUETOOTH_MAX_RETRIES = 10; // Number of times to retry, may need adjusting based on your system's bluetooth performance
   public BLUETOOTH_DEFAULT_RETRY_WAIT = 750; // In milliseconds (0.75 seconds)
   public BLUETOOTH_RETRY_WAIT_INCREMENT = 500; // In milliseconds, * number of retries, plus initial wait (0.75, 1.25, 1.75, 2.25, 2.75)
   public BLUETOOTH_COMMAND_TIMEOUT = 10000; // Node process timeout (10 seconds)
@@ -153,7 +153,7 @@ export class DigistatAccessory {
                   (this.BLUETOOTH_RETRY_WAIT_INCREMENT*2.5 - this.BLUETOOTH_RETRY_WAIT_INCREMENT) + this.BLUETOOTH_RETRY_WAIT_INCREMENT
                 )
               ));
-            this.platform.log.debug('Get Current Temperature Failed: Retrying in ' + Math.round(delay/100) + ' seconds');
+            this.platform.log.debug('Get Current Temperature Failed: Retrying in ' + Math.round(delay/1000) + ' seconds');
             await new Promise(resolve => setTimeout(resolve, Math.round(delay)));
         };
         try {
@@ -207,7 +207,7 @@ export class DigistatAccessory {
                             (this.BLUETOOTH_RETRY_WAIT_INCREMENT*2.5 - this.BLUETOOTH_RETRY_WAIT_INCREMENT) + this.BLUETOOTH_RETRY_WAIT_INCREMENT
                           )
                         ));
-            this.platform.log.debug('Get Current Temperature Failed: Retrying in ' + Math.round(delay/100) + ' seconds');
+            this.platform.log.debug('Get Current Temperature Failed: Retrying in ' + Math.round(delay/1000) + ' seconds');
             await new Promise(resolve => setTimeout(resolve, Math.round(delay)));
           };
           try {
@@ -276,7 +276,7 @@ export class DigistatAccessory {
                 (this.BLUETOOTH_RETRY_WAIT_INCREMENT*2.5 - this.BLUETOOTH_RETRY_WAIT_INCREMENT) + this.BLUETOOTH_RETRY_WAIT_INCREMENT
               )
             ));
-          this.platform.log.debug(`Setting Temperature in ${this.accessory.context.device.displayName} to ${value} Failed: Retrying in ` + Math.round(delay/100) + ' seconds');
+          this.platform.log.debug(`Setting Temperature in ${this.accessory.context.device.displayName} to ${value} Failed: Retrying in ` + Math.round(delay/1000) + ' seconds');
           await new Promise(resolve => setTimeout(resolve, Math.round(delay)));
       };
       try {
