@@ -179,9 +179,9 @@ export class DigistatAccessory {
     async getCurrentTemperaturePoll(forceImmediatePoll=false) {
       const now = new Date(); 
       if (!forceImmediatePoll && (now.getTime() - this.state.lastUpdatedCurrentTemp.getTime()) < (this.pollTimeInSeconds)) {
-        return this.state.currentTemp;
+        this.service.getCharacteristic(this.platform.Characteristic.CurrentTemperature).updateValue(this.state.currentTemp);
       } else {
-        var command = `'gatttool --sec-level=high --device=${this.accessory.context.device.macAddress} --char-read --handle="0x000f"'`
+        var command = `gatttool --sec-level=high --device=${this.accessory.context.device.macAddress} --char-read --handle='0x000f'`
         var success = false;
         var retryCounter = 0;
         var temperature = 0;
@@ -251,7 +251,7 @@ export class DigistatAccessory {
   async handleTargetTemperatureSet(value) {
     const temperatureAsHex = this.temperatureToHex(value);
     var initialTargetTemp = this.state.targetTemp ?? 17;   
-    var command = `'gatttool --sec-level=high --device=${this.accessory.context.device.macAddress} --char-write-req --handle="0x0008" --value="000009ff10c001000102c300"'`
+    var command = `gatttool --sec-level=high --device=${this.accessory.context.device.macAddress} --char-write-req --handle='0x0008' --value='000009ff10c001000102${temperatureAsHex}00'`
     var success = false;
     var retryCounter = 0;
     var temperature = 0;
@@ -274,7 +274,6 @@ export class DigistatAccessory {
             success = true
             this.state.targetTemp = value;
             this.platform.log.info(`Setting Temperature in: ${this.accessory.context.device.displayName} to ${this.state.currentTemp}`)
-            return value
         } else {
           this.platform.log.debug(`Setting Temperature in ${this.accessory.context.device.displayName} to ${value} Failed:`);
         }
@@ -284,7 +283,7 @@ export class DigistatAccessory {
       retryCounter++;
     } while (success && (retryCounter <= this.BLUETOOTH_MAX_RETRIES));
     if(!success) {
-      return initialTargetTemp;
+      this.platform.log.debug(`Setting Temperature in ${this.accessory.context.device.displayName} to ${value} Failed`);
     }
   }
 
