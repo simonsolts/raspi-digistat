@@ -178,6 +178,7 @@ export class DigistatAccessory {
         }
         retryCounter++;
       } while (!success || retryCounter > this.BLUETOOTH_MAX_RETRIES);
+      this.platform.globalState.bluetoothActiveDevice = null;
       try {
         if(success) {
           this.state.lastUpdatedCurrentTemp = new Date();
@@ -242,6 +243,7 @@ export class DigistatAccessory {
           }
           retryCounter++;
         } while (!success || retryCounter > this.BLUETOOTH_MAX_RETRIES);
+        this.platform.globalState.bluetoothActiveDevice = null;
         try {
           if(success) {
             this.state.lastUpdatedCurrentTemp = new Date();
