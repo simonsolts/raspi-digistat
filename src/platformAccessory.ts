@@ -127,7 +127,7 @@ export class DigistatAccessory {
     if ((now.getTime() - this.state.lastUpdatedCurrentTemp.getTime()) < (this.pollTimeInSeconds)) {
       return this.state.currentTemp;
     } else {
-      var command = `gatttool --sec-level=high --device=${this.accessory.context.device.macAddress} --char-read --handle='0x000f'`
+      var command = `'gatttool --sec-level=high --device=${this.accessory.context.device.macAddress} --char-read --handle="0x000f"'`
       var success = false;
       var retryCounter = 0;
       var temperature = 0;
@@ -251,7 +251,7 @@ export class DigistatAccessory {
   async handleTargetTemperatureSet(value) {
     const temperatureAsHex = this.temperatureToHex(value);
     var initialTargetTemp = this.state.targetTemp ?? 17;   
-    var command = `gatttool --sec-level=high --device=${this.accessory.context.device.macAddress} --char-read --handle='0x000f'`
+    var command = `'gatttool --sec-level=high --device=${this.accessory.context.device.macAddress} --char-write-req --handle="0x0008" --value="000009ff10c001000102c300"'`
     var success = false;
     var retryCounter = 0;
     var temperature = 0;
@@ -287,7 +287,7 @@ export class DigistatAccessory {
       return initialTargetTemp;
     }
   }
-  
+
   /**
    * Handle requests to get the current value of the "Temperature Display Units" characteristic
    */
