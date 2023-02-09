@@ -15,8 +15,8 @@ export class DigistatAccessory {
   private service: Service;
 
   public BLUETOOTH_MAX_RETRIES = 10; // Number of times to retry, may need adjusting based on your system's bluetooth performance
-  public BLUETOOTH_DEFAULT_RETRY_WAIT = 750; // In milliseconds (0.75 seconds)
-  public BLUETOOTH_RETRY_WAIT_INCREMENT = 500; // In milliseconds, * number of retries, plus initial wait (0.75, 1.25, 1.75, 2.25, 2.75)
+  public BLUETOOTH_DEFAULT_RETRY_WAIT = 100; // In milliseconds (0.75 seconds)
+  public BLUETOOTH_RETRY_WAIT_INCREMENT = 100;
   public BLUETOOTH_COMMAND_TIMEOUT = 10000; // Node process timeout (10 seconds)
   public pollTimeInMinutes = 15; // In minutes
   public pollTimeInMilliseconds = this.pollTimeInMinutes * 60000;
