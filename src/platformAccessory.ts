@@ -69,6 +69,7 @@ export class DigistatAccessory {
       .onSet(this.handleTemperatureDisplayUnitsSet.bind(this));
     
     this.getCurrentTemperaturePoll(true); // Get the current temperature on startup
+    this.setHeatingState(this.platform.Characteristic.CurrentHeatingCoolingState.OFF); // Set the heating state to off on startup
     setInterval(async () =>{await this.getCurrentTemperaturePoll()}, this.pollTimeInMilliseconds);
   }
 
@@ -109,13 +110,24 @@ export class DigistatAccessory {
   /**
    * Handle requests to set the "Target Heating Cooling State" characteristic
    */
-  async handleTargetHeatingCoolingStateSet(value: CharacteristicValue) {
-    this.platform.log.debug('Triggered SET TargetHeatingCoolingState');
-    if(value == this.platform.Characteristic.TargetHeatingCoolingState.HEAT) {
-      return value;
+  async handleTargetHeatingCoolingStateSet(value) {
+    if(value == this.platform.Characteristic.TargetHeatingCoolingState.OFF || value == this.platform.Characteristic.TargetHeatingCoolingState.COOL) {
+      this.state.targetTemp = 16;
+      this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature).setValue(this.state.targetTemp);
     } else {
-      return this.platform.Characteristic.TargetHeatingCoolingState.OFF;
+      let currentTemp = this.service.getCharacteristic(this.platform.Characteristic.CurrentTemperature).value;
+      this.state.targetTemp = Number(currentTemp) + 1.5;
+      if (this.state.targetTemp <= 24) {
+        this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature).setValue(this.state.targetTemp);
+      } 
     }
+
+    this.platform.log.debug('Triggered SET TargetHeatingCoolingState ' + value);
+  }
+
+  setHeatingState(value) {
+    this.state.heatingState = value;
+    this.service.getCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState).updateValue(value);
   }
 
 
@@ -127,7 +139,7 @@ export class DigistatAccessory {
     if ((now.getTime() - this.state.lastUpdatedCurrentTemp.getTime()) < (this.pollTimeInSeconds)) {
       return this.state.currentTemp;
     } else {
-      var command = `'gatttool --sec-level=high --device=${this.accessory.context.device.macAddress} --char-read --handle="0x000f"'`
+      var command = `gatttool --sec-level=high --device=${this.accessory.context.device.macAddress} --char-read --handle='0x000f'`
       var success = false;
       var retryCounter = 0;
       var temperature = 0;
@@ -159,7 +171,7 @@ export class DigistatAccessory {
           this.platform.log.debug('Get Current Temperature Failed: ' + e);
         }
         retryCounter++;
-      } while (success && (retryCounter <= this.BLUETOOTH_MAX_RETRIES));
+      } while (!success || retryCounter > this.BLUETOOTH_MAX_RETRIES);
       try {
         this.state.currentTemp = temperature;
         this.state.lastUpdatedCurrentTemp = new Date();
@@ -213,7 +225,7 @@ export class DigistatAccessory {
             this.platform.log.debug('Get TargetTemperature Failed: ' + e);
           }
           retryCounter++;
-        } while (success && retryCounter <= 3);
+        } while (!success || retryCounter > this.BLUETOOTH_MAX_RETRIES);
         try {
           this.state.currentTemp = temperature;
           this.state.lastUpdatedCurrentTemp = new Date();
@@ -233,13 +245,14 @@ export class DigistatAccessory {
   handleTargetTemperatureGet() {
     this.platform.log.debug('Triggered GET TargetTemperature');
     if (this.state.targetTemp <= 14) {
-      this.service.getCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState).updateValue(this.platform.Characteristic.CurrentHeatingCoolingState.OFF);
+      this.setHeatingState(this.platform.Characteristic.CurrentHeatingCoolingState.OFF);
+      this.state.targetTemp = 14;
       return 14
     } else if (this.state.targetTemp > this.state.currentTemp) {
-      this.service.getCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState).updateValue(this.platform.Characteristic.CurrentHeatingCoolingState.HEAT);
+      this.setHeatingState(this.platform.Characteristic.CurrentHeatingCoolingState.HEAT);
       return this.state.targetTemp;
     } else if (this.state.targetTemp <= this.state.currentTemp) {
-      this.service.getCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState).updateValue(this.platform.Characteristic.CurrentHeatingCoolingState.OFF);
+      this.setHeatingState(this.platform.Characteristic.CurrentHeatingCoolingState.OFF);
       if(this.state.targetTemp < 14) {return 14} else {return this.state.targetTemp}
     }
     return this.state.targetTemp
@@ -250,11 +263,9 @@ export class DigistatAccessory {
    */
   async handleTargetTemperatureSet(value) {
     const temperatureAsHex = this.temperatureToHex(value);
-    var initialTargetTemp = this.state.targetTemp ?? 17;   
     var command = `gatttool --sec-level=high --device=${this.accessory.context.device.macAddress} --char-write-req --handle='0x0008' --value='000009ff10c001000102${temperatureAsHex}00'`
     var success = false;
     var retryCounter = 0;
-    var temperature = 0;
     do {
       if(retryCounter > 0) {
           // Bluetooth is flaky, so we need to wait a bit before retrying
@@ -281,7 +292,7 @@ export class DigistatAccessory {
         this.platform.log.debug(`Setting Temperature in ${this.accessory.context.device.displayName} to ${value} Failed:` + e);
       }
       retryCounter++;
-    } while (success && (retryCounter <= this.BLUETOOTH_MAX_RETRIES));
+    } while (!success || (retryCounter > this.BLUETOOTH_MAX_RETRIES));
     if(!success) {
       this.platform.log.debug(`Setting Temperature in ${this.accessory.context.device.displayName} to ${value} Failed`);
     }
@@ -305,11 +316,9 @@ export class DigistatAccessory {
   handleTemperatureDisplayUnitsSet(value) {
     if(value == this.platform.Characteristic.TemperatureDisplayUnits.CELSIUS || this.platform.Characteristic.TemperatureDisplayUnits.FAHRENHEIT) {
       this.state.temperatureDisplayUnits = value;
-      return value;
     } else {
       this.platform.log.debug('Triggered SET TemperatureDisplayUnits: ' + value + ' is not a valid value, usign CELSIUS');
       this.state.temperatureDisplayUnits = this.platform.Characteristic.TemperatureDisplayUnits.CELSIUS;
-      return this.platform.Characteristic.TemperatureDisplayUnits.CELSIUS;
     }
   }
 
