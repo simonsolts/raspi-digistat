@@ -14,9 +14,13 @@ const { execSync } = require("child_process");
 export class DigistatAccessory {
   private service: Service;
 
-  public polltime = 15; // In minutes
-  public pollTimeInMilliseconds = this.polltime * 60000;
-  public pollTimeInSeconds = this.polltime * 60;
+  public BLUETOOTH_MAX_RETRIES = 5; // Number of times to retry, may need adjusting based on your system's bluetooth performance
+  public BLUETOOTH_DEFAULT_RETRY_WAIT = 750; // In milliseconds (0.75 seconds)
+  public BLUETOOTH_RETRY_WAIT_INCREMENT = 500; // In milliseconds, * number of retries, plus initial wait (0.75, 1.25, 1.75, 2.25, 2.75)
+  public BLUETOOTH_COMMAND_TIMEOUT = 10000; // Node process timeout (10 seconds)
+  public pollTimeInMinutes = 15; // In minutes
+  public pollTimeInMilliseconds = this.pollTimeInMinutes * 60000;
+  public pollTimeInSeconds = this.pollTimeInMinutes * 60;
   public state = {
     targetTemp: 10,
     currentTemp: 17,
@@ -64,6 +68,7 @@ export class DigistatAccessory {
       .onGet(this.handleTemperatureDisplayUnitsGet.bind(this))
       .onSet(this.handleTemperatureDisplayUnitsSet.bind(this));
     
+    this.getCurrentTemperaturePoll(true); // Get the current temperature on startup
     setInterval(async () =>{await this.getCurrentTemperaturePoll()}, this.pollTimeInMilliseconds);
   }
 
@@ -127,9 +132,20 @@ export class DigistatAccessory {
       var retryCounter = 0;
       var temperature = 0;
       do {
-        if(retryCounter > 0) {await this.sleep(10)};
+        if(retryCounter > 0) {
+            // Bluetooth is flaky, so we need to wait a bit before retrying
+            // The delay is a random number between 0 and 2.5 times the retry wait incrementc to avoid multiple devices all retrying at the same time
+            let delay = Math.round(this.BLUETOOTH_DEFAULT_RETRY_WAIT + 
+              (retryCounter * 
+                (Math.random() * 
+                  (this.BLUETOOTH_RETRY_WAIT_INCREMENT*2.5 - this.BLUETOOTH_RETRY_WAIT_INCREMENT) + this.BLUETOOTH_RETRY_WAIT_INCREMENT
+                )
+              ));
+            this.platform.log.debug('Get Current Temperature Failed: Retrying in ' + Math.round(delay/100) + ' seconds');
+            await new Promise(resolve => setTimeout(resolve, Math.round(delay)));
+        };
         try {
-          let output = execSync(command, {timeout: 20});
+          let output = execSync(command, {timeout: this.BLUETOOTH_COMMAND_TIMEOUT});
           if (output.toString().includes('Characteristic value/descriptor')) {
             temperature = this.temperatureOutputToValue(output);
             if(temperature) {
@@ -137,19 +153,20 @@ export class DigistatAccessory {
               success = true
             }
           } else {
-            this.platform.log.debug('Get Current Failed: ');
+            this.platform.log.debug('Get Current Temperature Failed: ');
           }
         } catch (e) {
-          this.platform.log.debug('Get Current Failed: ' + e);
+          this.platform.log.debug('Get Current Temperature Failed: ' + e);
         }
         retryCounter++;
-      } while (success && retryCounter++ <= 3);
+      } while (success && (retryCounter <= this.BLUETOOTH_MAX_RETRIES));
       try {
         this.state.currentTemp = temperature;
         this.state.lastUpdatedCurrentTemp = new Date();
+        this.platform.log.info(`Current Temperature in: ${this.accessory.context.device.displayName} is ${this.state.currentTemp}`);
         return this.state.currentTemp;
       } catch (e) {
-        this.platform.log.debug('Get Current Temperature Failed, using stale temperature: ' + e);
+        this.platform.log.warn('Get Current Temperature Failed, using stale temperature: ' + e);
         return this.state.currentTemp;
       }
       return this.state.currentTemp;
@@ -159,22 +176,33 @@ export class DigistatAccessory {
     /**
    * Handle requests to get the current value of the "Current Temperature" characteristic, used to poll so it's always up to date
    */
-    async getCurrentTemperaturePoll() {
+    async getCurrentTemperaturePoll(forceImmediatePoll=false) {
       const now = new Date(); 
-      if ((now.getTime() - this.state.lastUpdatedCurrentTemp.getTime()) / 1000 < (this.polltime * 60)) {
+      if (!forceImmediatePoll && (now.getTime() - this.state.lastUpdatedCurrentTemp.getTime()) < (this.pollTimeInSeconds)) {
         return this.state.currentTemp;
       } else {
-        var command = `gatttool --sec-level=high --device=${this.accessory.context.device.macAddress} --char-read --handle='0x000f'`
+        var command = `'gatttool --sec-level=high --device=${this.accessory.context.device.macAddress} --char-read --handle="0x000f"'`
         var success = false;
         var retryCounter = 0;
         var temperature = 0;
         do {
-          if(retryCounter > 0) {await this.sleep(10)};
+          if(retryCounter > 0) {
+            // Bluetooth is flaky, so we need to wait a bit before retrying
+            // The delay is a random number between 0 and 2.5 times the retry wait incrementc to avoid multiple devices all retrying at the same time
+            let delay = Math.round(this.BLUETOOTH_DEFAULT_RETRY_WAIT + 
+                        (retryCounter * 
+                          (Math.random() * 
+                            (this.BLUETOOTH_RETRY_WAIT_INCREMENT*2.5 - this.BLUETOOTH_RETRY_WAIT_INCREMENT) + this.BLUETOOTH_RETRY_WAIT_INCREMENT
+                          )
+                        ));
+            this.platform.log.debug('Get Current Temperature Failed: Retrying in ' + Math.round(delay/100) + ' seconds');
+            await new Promise(resolve => setTimeout(resolve, Math.round(delay)));
+          };
           try {
-            let output = execSync(command, {timeout: 20});
+            let output = execSync(command, {timeout: this.BLUETOOTH_COMMAND_TIMEOUT});
             if (output.toString().includes('Characteristic value/descriptor')) {
               temperature = this.temperatureOutputToValue(output);
-              if(temperature) {
+              if(temperature && temperature != 0) {
                 this.state.currentTemp = temperature;
                 success = true
               }
@@ -185,10 +213,11 @@ export class DigistatAccessory {
             this.platform.log.debug('Get TargetTemperature Failed: ' + e);
           }
           retryCounter++;
-        } while (success && retryCounter++ <= 3);
+        } while (success && retryCounter <= 3);
         try {
           this.state.currentTemp = temperature;
           this.state.lastUpdatedCurrentTemp = new Date();
+          this.platform.log.info(`Current Temperature in: ${this.accessory.context.device.displayName} is ${this.state.currentTemp}`);
           this.service.getCharacteristic(this.platform.Characteristic.CurrentTemperature).updateValue(this.state.currentTemp);
         } catch (e) {
           this.platform.log.debug('Get Current Temperature Failed, using stale temperature: ' + e);
@@ -220,29 +249,45 @@ export class DigistatAccessory {
    * Handle requests to set the "Target Temperature" characteristic
    */
   async handleTargetTemperatureSet(value) {
-    this.platform.log.debug('Triggered SET TargetTemperature: ' + value);
     const temperatureAsHex = this.temperatureToHex(value);
-    const command = `gatttool --sec-level=high --device=${this.accessory.context.device.macAddress} --char-write-req --handle='0x0008' --value='000009ff10c001000102${temperatureAsHex}00'`
-    let success = false;
-    try {
-      let output = execSync(command);
-      if (output.includes('Characteristic value was written successfully')) {
-        this.platform.log.info('Set TargetTemperature Success: ' + value);
-        success = true
-      } else {
-        this.platform.log.debug('Set TargetTemperature Failed: ' + value);
+    var initialTargetTemp = this.state.targetTemp ?? 17;   
+    var command = `gatttool --sec-level=high --device=${this.accessory.context.device.macAddress} --char-read --handle='0x000f'`
+    var success = false;
+    var retryCounter = 0;
+    var temperature = 0;
+    do {
+      if(retryCounter > 0) {
+          // Bluetooth is flaky, so we need to wait a bit before retrying
+          // The delay is a random number between 0 and 2.5 times the retry wait incrementc to avoid multiple devices all retrying at the same time
+          let delay = Math.round(this.BLUETOOTH_DEFAULT_RETRY_WAIT + 
+            (retryCounter * 
+              (Math.random() * 
+                (this.BLUETOOTH_RETRY_WAIT_INCREMENT*2.5 - this.BLUETOOTH_RETRY_WAIT_INCREMENT) + this.BLUETOOTH_RETRY_WAIT_INCREMENT
+              )
+            ));
+          this.platform.log.debug(`Setting Temperature in ${this.accessory.context.device.displayName} to ${value} Failed: Retrying in ` + Math.round(delay/100) + ' seconds');
+          await new Promise(resolve => setTimeout(resolve, Math.round(delay)));
+      };
+      try {
+        let output = execSync(command, {timeout: this.BLUETOOTH_COMMAND_TIMEOUT});
+        if (output.toString().includes('Characteristic value was written successfully')) {
+            success = true
+            this.state.targetTemp = value;
+            this.platform.log.info(`Setting Temperature in: ${this.accessory.context.device.displayName} to ${this.state.currentTemp}`)
+            return value
+        } else {
+          this.platform.log.debug(`Setting Temperature in ${this.accessory.context.device.displayName} to ${value} Failed:`);
+        }
+      } catch (e) {
+        this.platform.log.debug(`Setting Temperature in ${this.accessory.context.device.displayName} to ${value} Failed:` + e);
       }
-    } catch (e) {
-      this.platform.log.debug('Set TargetTemperature Failed: ' + e);
-    }
+      retryCounter++;
+    } while (success && (retryCounter <= this.BLUETOOTH_MAX_RETRIES));
     if(!success) {
-      await this.sleep(10);
-      execSync(command);
+      return initialTargetTemp;
     }
-    this.state.targetTemp = value;
-    return value
   }
-
+  
   /**
    * Handle requests to get the current value of the "Temperature Display Units" characteristic
    */
@@ -275,7 +320,7 @@ export class DigistatAccessory {
     return hex;
   }
 
-  temperatureOutputToValue(output: string) :number {
+  temperatureOutputToValue(output: Buffer) :number {
     const stringArray = output.toString().split(' ');
     const temperature = parseInt(stringArray[10] ?? '0', 16);
     if(temperature <= 100){ 
@@ -285,7 +330,7 @@ export class DigistatAccessory {
     }
   }
 
-  sleep(seconds) {
+  async sleep(seconds) {
     return new Promise((resolve) => {
       setTimeout(resolve, seconds * 1000);
     });
