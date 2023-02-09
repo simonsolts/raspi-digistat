@@ -136,7 +136,7 @@ export class DigistatAccessory {
    */
   async handleCurrentTemperatureGet() {
     const now = new Date(); 
-    if ((now.getTime() - this.state.lastUpdatedCurrentTemp.getTime()) < (this.pollTimeInSeconds)) {
+    if ((now.getTime() - this.state.lastUpdatedCurrentTemp.getTime()) < (this.pollTimeInMilliseconds)) {
       return this.state.currentTemp;
     } else {
       var command = `gatttool --sec-level=high --device=${this.accessory.context.device.macAddress} --char-read --handle='0x000f'`
@@ -157,15 +157,21 @@ export class DigistatAccessory {
             await new Promise(resolve => setTimeout(resolve, Math.round(delay)));
         };
         try {
-          let output = execSync(command, {timeout: this.BLUETOOTH_COMMAND_TIMEOUT});
-          if (output.toString().includes('Characteristic value/descriptor')) {
-            temperature = this.temperatureOutputToValue(output);
-            if(temperature) {
-              this.state.currentTemp = temperature;
-              success = true
+          if(!this.platform.globalState.bluetoothActiveDevice || this.platform.globalState.bluetoothActiveDevice == this.accessory.context.device.macAddress) {
+            this.platform.globalState.bluetoothActiveDevice = this.accessory.context.device.macAddress;
+            let output = execSync(command, {timeout: this.BLUETOOTH_COMMAND_TIMEOUT});
+            if (output.toString().includes('Characteristic value/descriptor')) {
+              temperature = this.temperatureOutputToValue(output);
+              if(temperature) {
+                this.state.currentTemp = temperature;
+                success = true
+                this.platform.globalState.bluetoothActiveDevice = null;
+              }
+            } else {
+              this.platform.log.debug('Get Current Temperature Failed: ');
             }
           } else {
-            this.platform.log.debug('Get Current Temperature Failed: ');
+            this.platform.log.debug('Waiting: Bluetooth device in use by ' + this.platform.globalState.bluetoothActiveDevice);
           }
         } catch (e) {
           this.platform.log.debug('Get Current Temperature Failed: ' + e);
@@ -173,10 +179,14 @@ export class DigistatAccessory {
         retryCounter++;
       } while (!success || retryCounter > this.BLUETOOTH_MAX_RETRIES);
       try {
-        this.state.currentTemp = temperature;
-        this.state.lastUpdatedCurrentTemp = new Date();
-        this.platform.log.info(`Current Temperature in: ${this.accessory.context.device.displayName} is ${this.state.currentTemp}`);
-        return this.state.currentTemp;
+        if(success) {
+          this.state.lastUpdatedCurrentTemp = new Date();
+          this.platform.log.info(`Current Temperature in: ${this.accessory.context.device.displayName} is ${this.state.currentTemp}`);
+          return this.state.currentTemp;
+        } else {
+          this.platform.log.warn('Get Current Temperature Failed, using stale temperature: ' + this.state.currentTemp);
+          return this.state.currentTemp;
+        }
       } catch (e) {
         this.platform.log.warn('Get Current Temperature Failed, using stale temperature: ' + e);
         return this.state.currentTemp;
@@ -190,7 +200,7 @@ export class DigistatAccessory {
    */
     async getCurrentTemperaturePoll(forceImmediatePoll=false) {
       const now = new Date(); 
-      if (!forceImmediatePoll && (now.getTime() - this.state.lastUpdatedCurrentTemp.getTime()) < (this.pollTimeInSeconds)) {
+      if (!forceImmediatePoll && (now.getTime() - this.state.lastUpdatedCurrentTemp.getTime()) < (this.pollTimeInMilliseconds)) {
         this.service.getCharacteristic(this.platform.Characteristic.CurrentTemperature).updateValue(this.state.currentTemp);
       } else {
         var command = `gatttool --sec-level=high --device=${this.accessory.context.device.macAddress} --char-read --handle='0x000f'`
@@ -211,15 +221,21 @@ export class DigistatAccessory {
             await new Promise(resolve => setTimeout(resolve, Math.round(delay)));
           };
           try {
-            let output = execSync(command, {timeout: this.BLUETOOTH_COMMAND_TIMEOUT});
-            if (output.toString().includes('Characteristic value/descriptor')) {
-              temperature = this.temperatureOutputToValue(output);
-              if(temperature && temperature != 0) {
-                this.state.currentTemp = temperature;
-                success = true
+            if(!this.platform.globalState.bluetoothActiveDevice || this.platform.globalState.bluetoothActiveDevice == this.accessory.context.device.macAddress) {
+              this.platform.globalState.bluetoothActiveDevice = this.accessory.context.device.macAddress;
+              let output = execSync(command, {timeout: this.BLUETOOTH_COMMAND_TIMEOUT});
+              if (output.toString().includes('Characteristic value/descriptor')) {
+                temperature = this.temperatureOutputToValue(output);
+                if(temperature && temperature != 0) {
+                  this.state.currentTemp = temperature;
+                  success = true
+                  this.platform.globalState.bluetoothActiveDevice = null;
+                }
+              } else {
+                this.platform.log.debug('Get TargetTemperature Failed: ');
               }
             } else {
-              this.platform.log.debug('Get TargetTemperature Failed: ');
+              this.platform.log.debug('Waiting: Bluetooth device in use by ' + this.platform.globalState.bluetoothActiveDevice);
             }
           } catch (e) {
             this.platform.log.debug('Get TargetTemperature Failed: ' + e);
@@ -227,10 +243,14 @@ export class DigistatAccessory {
           retryCounter++;
         } while (!success || retryCounter > this.BLUETOOTH_MAX_RETRIES);
         try {
-          this.state.currentTemp = temperature;
-          this.state.lastUpdatedCurrentTemp = new Date();
-          this.platform.log.info(`Current Temperature in: ${this.accessory.context.device.displayName} is ${this.state.currentTemp}`);
-          this.service.getCharacteristic(this.platform.Characteristic.CurrentTemperature).updateValue(this.state.currentTemp);
+          if(success) {
+            this.state.lastUpdatedCurrentTemp = new Date();
+            this.platform.log.info(`Current Temperature in: ${this.accessory.context.device.displayName} is ${this.state.currentTemp}`);
+            this.service.getCharacteristic(this.platform.Characteristic.CurrentTemperature).updateValue(this.state.currentTemp);
+          } else {
+            this.platform.log.warn('Get Current Temperature Failed, using stale temperature: ' + this.state.currentTemp);
+            this.service.getCharacteristic(this.platform.Characteristic.CurrentTemperature).updateValue(this.state.currentTemp);
+          }
         } catch (e) {
           this.platform.log.debug('Get Current Temperature Failed, using stale temperature: ' + e);
         }

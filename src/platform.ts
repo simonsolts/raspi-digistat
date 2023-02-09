@@ -14,14 +14,14 @@ export class DigistatPlatform implements DynamicPlatformPlugin {
 
   // this is used to track restored cached accessories
   public readonly accessories: PlatformAccessory[] = [];
-
+  public globalState: any = {};
   constructor(
     public readonly log: Logger,
     public readonly config: PlatformConfig,
     public readonly api: API,
   ) {
     this.log.debug('Finished initializing platform:', this.config.name);
-
+    this.globalState.bluetoothActiveDevice = null;
     // When this event is fired it means Homebridge has restored all cached accessories from disk.
     // Dynamic Platform plugins should only register new accessories after this event was fired,
     // in order to ensure they weren't added to homebridge already. This event can also be used
